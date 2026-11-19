@@ -126,3 +126,7 @@ company_research/*.json
 /company_research/*.md
 /documents/*.txt
 /documents/cv_template.html
+
+# Local CV reference collection
+/templates/cv-references.md
+/templates/reference-previews/

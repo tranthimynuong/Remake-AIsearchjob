@@ -12,8 +12,9 @@ Search preset for QA and QC jobs in southern Vietnam
 - Gender constraint: NỮ (hoặc Nam/Nữ, tuyệt đối loại bỏ các tin tuyển Nam / Chỉ tuyển Nam).
 """
 
+import argparse
 import sys
-import os
+from pathlib import Path
 import re
 import time
 import json
@@ -313,37 +314,36 @@ def scrape_vieclam24h(keywords=["QC", "kiểm soát chất lượng", "QA"]):
     print(f"   => Tìm được {len(results)} tin phù hợp trên Việc Làm 24h.")
     return results
 
-def main():
-    all_jobs = []
-    seen = set()
+def collect_jobs(portals):
+    jobs = {}
+    for name, scrape in portals:
+        print(f"Đang quét {name}...")
+        for job in scrape():
+            key = (job["title"].strip().casefold(), job["company"].strip().casefold())
+            previous = jobs.get(key)
+            if previous is None or job["score"] > previous["score"]:
+                jobs[key] = job
+    return sorted(jobs.values(), key=lambda job: job["score"], reverse=True)
 
-    # 1. CareerViet
-    cv_jobs = scrape_careerviet("qc", max_pages=3)
-    cv_jobs += scrape_careerviet("kiem-soat-chat-luong", max_pages=2)
-    for j in cv_jobs:
-        key = f"{j['title'].lower()}_{j['company'].lower()}"
-        if key not in seen:
-            seen.add(key)
-            all_jobs.append(j)
 
-    # 2. VietnamWorks
-    vnw_jobs = scrape_vietnamworks(["QC", "Kiểm soát chất lượng", "QA"])
-    for j in vnw_jobs:
-        key = f"{j['title'].lower()}_{j['company'].lower()}"
-        if key not in seen:
-            seen.add(key)
-            all_jobs.append(j)
-
-    # 3. Vieclam24h
-    vl_jobs = scrape_vieclam24h(["QC", "kiểm soát chất lượng", "QA"])
-    for j in vl_jobs:
-        key = f"{j['title'].lower()}_{j['company'].lower()}"
-        if key not in seen:
-            seen.add(key)
-            all_jobs.append(j)
-
-    # Sort by relevance score
-    all_jobs.sort(key=lambda x: x['score'], reverse=True)
+def main(argv=None):
+    portals = {
+        "careerviet": (
+            "CareerViet",
+            lambda: scrape_careerviet("qc", max_pages=3)
+            + scrape_careerviet("kiem-soat-chat-luong", max_pages=2),
+        ),
+        "vietnamworks": ("VietnamWorks", scrape_vietnamworks),
+        "vieclam24h": ("Việc Làm 24h", scrape_vieclam24h),
+    }
+    parser = argparse.ArgumentParser(description="Thu thập tin tuyển dụng QA/QC.")
+    parser.add_argument(
+        "--portal", choices=portals, help="Chỉ quét một nguồn. Mặc định quét tất cả."
+    )
+    args = parser.parse_args(argv)
+    selected = [portals[args.portal]] if args.portal else list(portals.values())
+    all_jobs = collect_jobs(selected)
+    source_names = ", ".join(name for name, _ in selected)
 
     print(f"\n=======================================================")
     print(f"TỔNG CỘNG LỌC ĐƯỢC: {len(all_jobs)} VIỆC PHÙ HỢP CHO NỮ")
@@ -351,12 +351,15 @@ def main():
     print(f"=======================================================")
 
     # Output to markdown file
-    out_dir = "documents/postings"
-    os.makedirs(out_dir, exist_ok=True)
-    md_path = os.path.join(out_dir, "multi_portal_female_qc_jobs.md")
+    out_dir = Path(__file__).resolve().parents[1] / "documents" / "postings"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output_name = "multi_portal_female_qc_jobs"
+    if args.portal:
+        output_name += f"_{args.portal}"
+    md_path = out_dir / f"{output_name}.md"
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# Danh Sách Việc Làm QA/QC Phù Hợp Cho Nữ (TP.HCM & Các KCN Lân Cận)\n\n")
-        f.write(f"*Cập nhật trực tiếp từ VietnamWorks, CareerViet, Việc Làm 24h - Ngày {time.strftime('%d/%m/%Y')}*\n\n")
+        f.write(f"*Nguồn đã quét: {source_names} - Ngày {time.strftime('%d/%m/%Y')}*\n\n")
         f.write("> **Bộ lọc áp dụng:**\n")
         f.write("> 1. **Giới tính:** Tuyển Nữ hoặc Nam/Nữ (Đã loại trừ 100% các tin yêu cầu chỉ tuyển Nam / việc nặng nhọc).\n")
         f.write("> 2. **Khu vực:** TP.HCM (đặc biệt TP. Thủ Đức, Q.9), Bình Dương (Dĩ An, Thuận An, Sóng Thần, VSIP), Đồng Nai (Biên Hòa, Amata).\n")
@@ -366,7 +369,7 @@ def main():
         for i, j in enumerate(all_jobs, 1):
             f.write(f"| {i} | **{j['score']}%** | **{j['title']}** | {j['company']} | {j['location']} | {j['salary']} | {j['portal']} | [Xem & Ứng Tuyển]({j['url']}) |\n")
 
-    json_path = os.path.join(out_dir, "multi_portal_female_qc_jobs.json")
+    json_path = out_dir / f"{output_name}.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(all_jobs, f, ensure_ascii=False, indent=2)
 

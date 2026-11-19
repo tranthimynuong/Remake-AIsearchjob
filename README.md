@@ -30,9 +30,10 @@ Chạy scraper từ thư mục gốc của repo:
 ```sh
 python -m pip install requests beautifulsoup4
 python tools/multi_portal_scraper.py
+python tools/multi_portal_scraper.py --portal careerviet
 ```
 
-Các báo cáo do scraper tạo nằm trong `documents/postings/` và được Git bỏ qua. Xem [tài liệu dự án gốc](https://github.com/MadsLorentzen/ai-job-search) để đọc thêm về framework và quy trình ứng tuyển.
+Dùng `--portal` để quét riêng `careerviet`, `vietnamworks` hoặc `vieclam24h`. Mỗi lần quét riêng tạo báo cáo có hậu tố tên nguồn. Các báo cáo do scraper tạo nằm trong `documents/postings/` và được Git bỏ qua. Xem [tài liệu dự án gốc](https://github.com/MadsLorentzen/ai-job-search) để đọc thêm về framework và quy trình ứng tuyển.
 
 ## What this is
 
